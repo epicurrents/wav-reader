@@ -7,7 +7,7 @@ import { Log } from 'scoped-event-log'
 import type { WavHeader } from '#types'
 
 const SCOPE = 'WavDecoder'
-/** Value that normalizes a signed 16-bit integer between -1 - 1. */
+/** Value that normalizes a signed 16-bit integer between -1 and 1. */
 const MAX_SIGNED_16BIT = 32_768
 
 export class WavDecoder implements SignalDataDecoder {
@@ -16,7 +16,8 @@ export class WavDecoder implements SignalDataDecoder {
     protected _inputBuffer: ArrayBuffer | null = null
     protected _output: WavHeader | null = null
 
-    constructor (normalizationFactor = MAX_SIGNED_16BIT) {
+    constructor (normalizationFactor = MAX_SIGNED_16BIT*1e6) {
+        // Default normalization factor expects the signal integer values to represent microvolts.
         this._normalizationFactor = normalizationFactor
     }
 
