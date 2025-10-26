@@ -49,6 +49,7 @@ onmessage = async (message: WorkerMessage) => {
                 Log.error(
                     `An error occurred while trying to cache signals, operation was aborted: ${(e as Error).message}.`,
                 SCOPE, e as Error)
+                return returnFailure((e as Error).message)
             }
         }
         case 'get-signals': {
