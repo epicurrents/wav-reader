@@ -13,7 +13,14 @@ module.exports = {
         rules: [
             {
                 test: /\.tsx?$/,
-                use: 'ts-loader',
+                use: {
+                    loader: 'ts-loader',
+                    options: {
+                        // Suppress declaration-file emit during the webpack pass.
+                        // Full type-checking and .d.ts generation are handled by build:tsc.
+                        transpileOnly: true,
+                    },
+                },
                 exclude: '/node_modules/',
             },
         ],
@@ -40,6 +47,6 @@ module.exports = {
             '#types': path.resolve(__dirname, 'src', 'types'),
             '#workers': path.resolve(__dirname, 'src', 'workers'),
         },
-        symlinks: false
+        symlinks: true
     },
 }
