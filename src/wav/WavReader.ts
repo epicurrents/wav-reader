@@ -74,7 +74,12 @@ export default class WavReader extends GenericSignalReader implements SignalData
             headers.append('Authorization', authHeader)
         }
         try {
-            const response = await (await fetch(url, { method: 'GET', headers: headers })).arrayBuffer()
+            const fetched = await fetch(url, { method: 'GET', headers: headers })
+            if (!fetched.ok) {
+                // Do not decode an error body as WAV samples; the catch below returns false.
+                throw new Error(`WAV request failed with HTTP ${fetched.status}.`)
+            }
+            const response = await fetched.arrayBuffer()
             this._decoder.setInput(response)
             const header = this._decoder.decodeHeader()?.header
             if (!header) {

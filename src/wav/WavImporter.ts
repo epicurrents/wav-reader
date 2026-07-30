@@ -114,15 +114,11 @@ export default class WavImporter extends GenericStudyImporter implements SignalS
         } as StudyContextFile
         try {
             // Load header part from the WAV file into the study.
-            const headers = new Headers()
-            headers.set('range', 'bytes=0-1023')
-            if (config?.authHeader) {
-                headers.set('Authorization', config.authHeader)
-            }
-            const mainHeader = await fetch(url, {
-                headers: headers,
+            const buffer = await this._fetchArrayBuffer(url, {
+                authHeader: config?.authHeader,
+                range: [0, 1023],
             })
-            const wavHeader = await this.readHeader(await mainHeader.arrayBuffer())
+            const wavHeader = await this.readHeader(buffer)
             if (!wavHeader) {
                 Log.error(`Could not load WAV header from the given URL.`, SCOPE)
                 return null
