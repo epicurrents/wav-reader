@@ -25,7 +25,7 @@ export default class WavWorkerSubstitute extends ServiceWorkerSubstitute impleme
         if (!window.__EPICURRENTS__?.RUNTIME) {
             Log.error(`Reference to main application was not found!`, SCOPE)
         }
-        this._reader = new WavReader(window.__EPICURRENTS__.RUNTIME.SETTINGS)
+        this._reader = new WavReader(window.__EPICURRENTS__.RUNTIME!.SETTINGS)
         const updateCallback = (update: { [prop: string]: unknown }) => {
             if (update.action === 'cache-signals') {
                 this.returnMessage(update as WorkerMessage['data'])
