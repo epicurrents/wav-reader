@@ -8,7 +8,7 @@
 import {
     GenericSignalReader,
 } from '@epicurrents/core'
-import type { AppSettings, SignalDataReader } from '@epicurrents/core/dist/types'
+import type { AppSettings, SignalSourceOptions, SignalStudyReader } from '@epicurrents/core/dist/types'
 import { WavDecoder } from './WavDecoder'
 import { Log } from 'scoped-event-log'
 import { headerToBiosignalHeader } from '#util'
@@ -16,7 +16,7 @@ import type { WavHeader } from '#types'
 
 const SCOPE = 'WavReader'
 
-export default class WavReader extends GenericSignalReader implements SignalDataReader {
+export default class WavReader extends GenericSignalReader implements SignalStudyReader {
 
     protected _decoder = null as WavDecoder | null
     /** Parsed header of the WAV recording. */
@@ -51,14 +51,7 @@ export default class WavReader extends GenericSignalReader implements SignalData
         Log.debug(`Cached WAV info for recording.`, SCOPE)
     }
 
-    /**
-     * Set up study parameters for file loading. This will initializes the shared array buffer for storing the signal
-     * data and can only be done once. This method will send the true recording duration to the main thread as part of
-     * the worker response object (response.recordingLength).
-     * @param url - Source URL of the EDF data file.
-     * @param authHeader - Authorization header to include in the request - optional.
-     */
-    async setupStudy (url: string, authHeader?: string) {
+    async setupStudy (source: SignalSourceOptions) {
         // Make sure there aren't any cached signals yet.
         if (this._mutex || this._fallbackCache) {
             Log.error(
@@ -66,21 +59,34 @@ export default class WavReader extends GenericSignalReader implements SignalData
             SCOPE)
             return false
         }
-        this._decoder = new WavDecoder()
-        // Store the header for later use.
-        const headers = new Headers()
-        headers.set('Range', `bytes=0-1023`) // The first kB should contain the full header.
-        if (authHeader) {
-            headers.append('Authorization', authHeader)
+        if (!source.file && !source.url) {
+            Log.error(
+                [`Could not set study parameters.`, `Neither a source file nor a source URL was given.`],
+            SCOPE)
+            return false
         }
+        this._decoder = new WavDecoder()
+        // The first kB should contain the full header.
+        const HEADER_BYTES = 1024
+        const sourceName = source.file?.name || source.url as string
         try {
-            const fetched = await fetch(url, { method: 'GET', headers: headers })
-            if (!fetched.ok) {
-                // Do not decode an error body as WAV samples; the catch below returns false.
-                throw new Error(`WAV request failed with HTTP ${fetched.status}.`)
+            let head: ArrayBuffer
+            if (source.file) {
+                head = await source.file.slice(0, HEADER_BYTES).arrayBuffer()
+            } else {
+                const headers = new Headers()
+                headers.set('Range', `bytes=0-${HEADER_BYTES - 1}`)
+                if (source.authHeader) {
+                    headers.append('Authorization', source.authHeader)
+                }
+                const fetched = await fetch(source.url as string, { method: 'GET', headers: headers })
+                if (!fetched.ok) {
+                    // Do not decode an error body as WAV samples; the catch below returns false.
+                    throw new Error(`WAV request failed with HTTP ${fetched.status}.`)
+                }
+                head = await fetched.arrayBuffer()
             }
-            const response = await fetched.arrayBuffer()
-            this._decoder.setInput(response)
+            this._decoder.setInput(head)
             const header = this._decoder.decodeHeader()?.header
             if (!header) {
                 Log.error(`Could not parse WAV header.`, SCOPE)
@@ -89,12 +95,15 @@ export default class WavReader extends GenericSignalReader implements SignalData
             // Initialize file loader.
             this.cacheWavInfo(header)
         } catch (error) {
-            Log.error(`Could not fetch WAV header from ${url}.`, SCOPE, error as Error)
+            Log.error(`Could not read the WAV header from ${sourceName}.`, SCOPE, error as Error)
             return false
         }
-        this._url = url
-        if (authHeader) {
-            this._authHeader = authHeader
+        this._url = source.url || ''
+        if (source.file) {
+            this._setSourceFile(source.file)
+        }
+        if (source.authHeader) {
+            this._authHeader = source.authHeader
         }
         // Reset possible running cache processes.
         for (let i=0; i<this._cacheProcesses.length; i++) {
