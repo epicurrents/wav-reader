@@ -12,7 +12,7 @@ import type {
     SignalStudyImporter,
     StudyContextFile,
     StudyFileContext,
-} from '@epicurrents/core/dist/types'
+} from '@epicurrents/core/types'
 import { WavDecoder } from './WavDecoder'
 import { Log } from 'scoped-event-log'
 

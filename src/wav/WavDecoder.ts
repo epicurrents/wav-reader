@@ -1,7 +1,7 @@
 
 
 import { BiosignalAudio } from '@epicurrents/core'
-import type { SignalDataDecoder } from '@epicurrents/core/dist/types'
+import type { SignalDataDecoder } from '@epicurrents/core/types'
 import { unpackArray, unpackString } from 'byte-data'
 import { Log } from 'scoped-event-log'
 import type { WavHeader } from '#types'

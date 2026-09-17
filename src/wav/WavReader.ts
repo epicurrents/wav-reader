@@ -8,7 +8,7 @@
 import {
     GenericSignalReader,
 } from '@epicurrents/core'
-import type { AppSettings, SignalSourceOptions, SignalStudyReader } from '@epicurrents/core/dist/types'
+import type { AppSettings, SignalSourceOptions, SignalStudyReader } from '@epicurrents/core/types'
 import { WavDecoder } from './WavDecoder'
 import { Log } from 'scoped-event-log'
 import { headerToBiosignalHeader } from '#util'

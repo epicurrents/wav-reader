@@ -5,7 +5,7 @@
  * @license    Apache-2.0
  */
 
-import { FileFormatImporter } from '@epicurrents/core/dist/types'
+import { FileFormatImporter } from '@epicurrents/core/types'
 
 export interface WavFileImporter extends FileFormatImporter {
 
