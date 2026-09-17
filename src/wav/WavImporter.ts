@@ -15,6 +15,7 @@ import type {
 } from '@epicurrents/core/types'
 import { WavDecoder } from './WavDecoder'
 import { Log } from 'scoped-event-log'
+import InlineWavWorker from '../workers/wav.worker.ts?worker&inline'
 
 const SCOPE = 'WavReader'
 
@@ -52,11 +53,7 @@ export default class WavImporter extends GenericStudyImporter implements SignalS
 
     getFileTypeWorker (override?: string): Worker | null {
         const workerOverride = this._workerOverrides.get(override || 'wav')
-        const worker = workerOverride ? workerOverride() : new Worker(
-            /* webpackChunkName: 'wav.worker' */
-            new URL('../workers/wav.worker', import.meta.url),
-            { type: 'module' }
-        )
+        const worker = workerOverride ? workerOverride() : new InlineWavWorker()
         Log.registerWorker(worker)
         return worker
     }
