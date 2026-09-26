@@ -9,7 +9,6 @@ import { ServiceWorkerSubstitute } from '@epicurrents/core'
 import { validateCommissionProps } from '@epicurrents/core/util'
 import type {
     ConfigChannelFilter,
-    GetSignalsResponse,
     WorkerMessage,
     WorkerSubstitute,
 } from '@epicurrents/core/types'
@@ -43,8 +42,7 @@ export default class WavWorkerSubstitute extends ServiceWorkerSubstitute impleme
             case 'cache-signals': {
                 try {
                     const success = await this._reader.cacheSignals()
-                    return this.returnSuccess({
-                        ...message,
+                    return this.returnSuccess(message, {
                         complete: success,
                     })
                 } catch (e: unknown) {
@@ -78,10 +76,9 @@ export default class WavWorkerSubstitute extends ServiceWorkerSubstitute impleme
                 try {
                     const sigs = await this._reader.getSignals(data.range, data.config)
                     if (sigs) {
-                        return this.returnSuccess({
-                            ...message,
+                        return this.returnSuccess(message, {
                             ...sigs,
-                        } as WorkerMessage['data'] & Omit<GetSignalsResponse, 'success'>)
+                        })
                     } else {
                         return this.returnFailure(message)
                     }
@@ -113,8 +110,7 @@ export default class WavWorkerSubstitute extends ServiceWorkerSubstitute impleme
                 // Duration is not a mandatory property.
                 const duration = (message.dataDuration as number) || 0
                 const cache = this._reader.setupCache(duration)
-                return this.returnSuccess({
-                    ...message,
+                return this.returnSuccess(message, {
                     cacheProperties: cache,
                 })
             }
@@ -142,8 +138,7 @@ export default class WavWorkerSubstitute extends ServiceWorkerSubstitute impleme
                     { authHeader: data.authHeader, file: data.file, url: data.url }
                 )
                 if (result) {
-                    return this.returnSuccess({
-                        ...message,
+                    return this.returnSuccess(message, {
                         dataLength: this._reader.dataLength,
                         recordingLength: this._reader.totalLength,
                     })
