@@ -30,7 +30,7 @@ The package is registered by the builder's EMG edition, so unlike the unwired mo
 
 The package now extends `SignalReaderWorkerSubstitute`, which the published core 2.0.0 does not export — confirmed by unpacking its tarball. `^2.0.0` therefore states a version the package does not work against, and the range has to become `^2.1.0` once core publishes that class and the three `BaseWorker` members behind it. The same is true of `csv-reader`, `dicom-reader`, `natus-reader` and `nic-reader`, and the builder's roadmap tracks the set; `^2.0.0` is what the package is verified against in the workspace, and the bump belongs to the release rather than to this pass.
 
-The worker's `setup-worker` still validates through `validateCommissionProps` rather than the base class's `_validate`, matching the four siblings. Converting it is free once the range moves, and buys the reply following a redirected transport.
+`_validate` is one of those three members, and the worker's `setup-worker` uses it: validating through the exported utility instead sends the refusal to whatever `postMessage` resolves to at the call site rather than through the worker's own transport, and left the handler reporting the refusal a second time after the validator had already answered the commission. The range the package declares already has to move for the substitute class, so using it costs nothing further.
 
 ## Open
 

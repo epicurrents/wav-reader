@@ -9,7 +9,6 @@
 import { SETTINGS } from '@epicurrents/core'
 import { SignalReaderWorker } from '@epicurrents/core/workers'
 import type { WorkerMessage } from '@epicurrents/core/types'
-import { validateCommissionProps } from '@epicurrents/core/util'
 import { Log } from 'scoped-event-log'
 import WavReader from '#wav/WavReader'
 
@@ -57,7 +56,7 @@ class WavWorker extends SignalReaderWorker<WavReader> {
      * @param msgData - Data property from the message to the worker.
      */
     async setupWorker (msgData: WorkerMessage['data']) {
-        const data = validateCommissionProps(
+        const data = this._validate(
             msgData as WorkerMessage['data'] & {
                 authHeader?: string
                 file?: File
@@ -72,7 +71,11 @@ class WavWorker extends SignalReaderWorker<WavReader> {
             }
         )
         if (!data) {
-            return this._failure(msgData, `Validating commission props failed.`)
+            // The commission is already answered: `_validate` reports the property it refused on
+            // through the same transport as any other reply. Answering again here would post a
+            // second response with the same request number, which the service has no commission
+            // left to match it to.
+            return false
         }
         if (!await this._reader.setupStudy({ authHeader: data.authHeader, file: data.file, url: data.url })) {
             return this._failure(msgData, `Setting up study failed.`)

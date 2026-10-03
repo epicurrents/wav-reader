@@ -63,6 +63,10 @@ describe('setup-worker', () => {
     test('reports a failure when a property is of the wrong type', async () => {
         const answered = await commission({ action: 'setup-worker', url: 42 })
         expect(answered[0]?.success).toBe(false)
+        // Exactly one reply. The validator answers the commission itself, so a handler that also
+        // reported the refusal would post a second response carrying the same request number, and
+        // the service releases the commission on the first one.
+        expect(answered).toHaveLength(1)
     })
 
     test('reports a failure when the study cannot be opened', async () => {
