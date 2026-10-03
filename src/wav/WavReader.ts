@@ -9,7 +9,7 @@ import {
     GenericSignalReader,
 } from '@epicurrents/core'
 import type { AppSettings, SignalSourceOptions, SignalStudyReader } from '@epicurrents/core/types'
-import { WavDecoder } from './WavDecoder'
+import { SUPPORTED_BITS_PER_SAMPLE, WavDecoder } from '#wav/WavDecoder'
 import { Log } from 'scoped-event-log'
 import { headerToBiosignalHeader } from '#util'
 import type { WavHeader } from '#types'
@@ -21,14 +21,12 @@ export default class WavReader extends GenericSignalReader implements SignalStud
     protected _decoder = null as WavDecoder | null
     /** Parsed header of the WAV recording. */
     protected _fileTypeHeader = null as WavHeader | null
-    /** A method to pass update messages through. */
-    protected _updateCallback = null as ((update: { [prop: string]: unknown }) => void) | null
-    /** Settings must be kept up-to-date with the main application. */
-    #SETTINGS: AppSettings
 
     constructor (settings: AppSettings) {
-        super(Int16Array)
-        this.#SETTINGS = settings
+        // Handed to the base class rather than kept here as well: the application mutates the
+        // settings object in place when it relays an update, and a second reference to read through
+        // is one the base class's own cache-size arithmetic would not see.
+        super(Int16Array, settings)
     }
 
     /**
@@ -43,8 +41,8 @@ export default class WavReader extends GenericSignalReader implements SignalStud
         this._totalDataLength = header.duration
         this._totalRecordingLength = this._totalDataLength // WAV has no gaps.
         this._dataUnitSize = header.samplingRate*header.nChannels*2 // int16.
-        this._chunkUnitCount = this._dataUnitSize*2 < this.#SETTINGS.app.dataChunkSize
-                                ? Math.floor(this.#SETTINGS.app.dataChunkSize/(this._dataUnitSize)) - 1
+        this._chunkUnitCount = this._dataUnitSize*2 < this.SETTINGS.app.dataChunkSize
+                                ? Math.floor(this.SETTINGS.app.dataChunkSize/(this._dataUnitSize)) - 1
                                 : 1
         this._discontinuous = false
         this._header = headerToBiosignalHeader(header)
@@ -92,6 +90,18 @@ export default class WavReader extends GenericSignalReader implements SignalStud
                 Log.error(`Could not parse WAV header.`, SCOPE)
                 return false
             }
+            if (header.bitsPerSample !== SUPPORTED_BITS_PER_SAMPLE) {
+                // Refused here rather than at the first read: the cache element type and the
+                // data-unit size below are both fixed at two bytes per sample, so a file of another
+                // width would be served as pairs of its own samples — plausible values at half the
+                // sample count. A study that cannot be read is better not opened.
+                Log.error(
+                    `Cannot read ${sourceName}: ${header.bitsPerSample}-bit samples are not ` +
+                    `supported (only ${SUPPORTED_BITS_PER_SAMPLE}-bit PCM is).`,
+                    SCOPE
+                )
+                return false
+            }
             // Initialize file loader.
             this.cacheWavInfo(header)
         } catch (error) {
@@ -105,11 +115,13 @@ export default class WavReader extends GenericSignalReader implements SignalStud
         if (source.authHeader) {
             this._authHeader = source.authHeader
         }
-        // Reset possible running cache processes.
-        for (let i=0; i<this._cacheProcesses.length; i++) {
-            this._cacheProcesses[i].continue = false
-            this._cacheProcesses.splice(i, 1)
+        // Reset possible running cache processes. Cleared as a whole rather than spliced per index:
+        // removing an element shifts the next one into the index just vacated, which a forward loop
+        // then steps over, leaving half of them running against the cache the new study replaces.
+        for (const process of this._cacheProcesses) {
+            process.continue = false
         }
+        this._cacheProcesses.length = 0
         return true
     }
 

@@ -18,7 +18,38 @@ const SCOPE = 'wav.worker'
 class WavWorker extends SignalReaderWorker<WavReader> {
     constructor () {
         super(new WavReader(SETTINGS))
+        // Only `setup-worker` is registered. The base class builds its action map in a field
+        // initializer, where `this.setInterruptions` already resolves through the prototype chain
+        // to the override below, so registering that one again would change nothing; `setup-worker`
+        // is in no base map, which is why it has to be added.
+        //
+        // The map is bound at dispatch by `handleMessage`, so an entry added unbound here still
+        // runs with this worker as its `this`.
+        // eslint-disable-next-line @typescript-eslint/unbound-method
         this.extendActionMap([['setup-worker', this.setupWorker]])
+    }
+
+    /**
+     * Refuse an interruption table rather than applying it.
+     *
+     * A WAV file holds one continuous span of PCM samples, so recording time and data time are the
+     * same measurement and a sample position needs no gap arithmetic to reach it. A table saying
+     * otherwise describes a timeline this reader does not serve: honouring it would displace every
+     * later read by the gaps it declares, and return samples that still look entirely plausible. An
+     * empty table asserts nothing and is passed on, since it is also how a caller marks the timing
+     * of a recording fully known.
+     * @param msgData - Data property from the message to the worker.
+     */
+    override async setInterruptions (msgData: WorkerMessage['data']) {
+        const interruptions = msgData.interruptions
+        if (Array.isArray(interruptions) && interruptions.length) {
+            return this._failure(
+                msgData,
+                `Cannot apply an interruption table to a WAV study: the samples are one continuous ` +
+                `span, so recording time and data time are the same measurement.`
+            )
+        }
+        return super.setInterruptions(msgData)
     }
 
     /**
@@ -60,5 +91,5 @@ onmessage = async (message: WorkerMessage) => {
         return
     }
     Log.debug(`Received message with action ${message.data.action}.`, SCOPE)
-    WORKER.handleMessage(message)
+    await WORKER.handleMessage(message)
 }

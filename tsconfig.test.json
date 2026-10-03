@@ -1,0 +1,25 @@
+{
+  /*
+   * Type-check the test suite against the real `@epicurrents/core` types.
+   *
+   * The suite builds WAV files byte by byte and drives the real decoder, reader, importer and
+   * substitute over them, so nothing stands in for core and this config has no mock directory whose
+   * types would have to be reconciled with the ones the package ships against.
+   */
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "noEmit": true,
+    "declaration": false,             /* No .d.ts files for tests. */
+    "noUnusedLocals": false,          /* A fixture may be built and not used in every case. */
+    "noUnusedParameters": false,
+    "types": ["node"],                /* Vitest's helpers are imported explicitly, not as globals. */
+    "typeRoots": ["../../node_modules/@types", "./node_modules/@types"],
+    "paths": {
+      "#*": ["src/*"],
+      "#root/*": ["./*"]
+    }
+  },
+  "include": ["./tests/**/*", "./src/**/*"],
+  "exclude": ["node_modules", "dist"]
+}

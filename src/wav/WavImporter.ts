@@ -1,5 +1,6 @@
 /**
- * Epicurrents WAV reader.
+ * Epicurrents WAV importer. Recognises a WAV file, reads its header into the study and hands over
+ * the worker the study's signals are then read through.
  * @package    epicurrents/wav-reader
  * @copyright  2025 Sampsa Lohi
  * @license    Apache-2.0
@@ -13,11 +14,11 @@ import type {
     StudyContextFile,
     StudyFileContext,
 } from '@epicurrents/core/types'
-import { WavDecoder } from './WavDecoder'
+import { WavDecoder } from '#wav/WavDecoder'
 import { Log } from 'scoped-event-log'
 import InlineWavWorker from '../workers/wav.worker.ts?worker&inline'
 
-const SCOPE = 'WavReader'
+const SCOPE = 'WavImporter'
 
 export default class WavImporter extends GenericStudyImporter implements SignalStudyImporter {
     protected _decoder = new WavDecoder()
@@ -26,15 +27,19 @@ export default class WavImporter extends GenericStudyImporter implements SignalS
         const fileTypeAssocs = [
             {
                 accept: {
-                    "audio/wav": ['.wav'],
+                    'audio/wav': ['.wav'],
                 },
-                description: "WAV audio file",
+                description: 'WAV audio file',
             },
         ] as AssociatedFileType[]
         super(SCOPE, [], fileTypeAssocs)
     }
 
-    protected async _readHeaderInfo (source: ArrayBuffer) {
+    /**
+     * Parse `source` and record the recording properties it declares into the study metadata.
+     * @param source - The leading bytes of the file, which have to cover the whole header.
+     */
+    protected _readHeaderInfo (source: ArrayBuffer) {
         this._decoder.setInput(source)
         this._decoder.decodeHeader()
         const fullHeader = this._decoder.output
@@ -51,13 +56,16 @@ export default class WavImporter extends GenericStudyImporter implements SignalS
         }
     }
 
-    getFileTypeWorker (override?: string): Worker | null {
+    getFileTypeWorker (override?: string): Worker {
         const workerOverride = this._workerOverrides.get(override || 'wav')
         const worker = workerOverride ? workerOverride() : new InlineWavWorker()
         Log.registerWorker(worker)
         return worker
     }
 
+    // The interface declares this asynchronous because a format may have to fetch more of the file
+    // to find its header. This one is handed every byte it needs.
+    // eslint-disable-next-line @typescript-eslint/require-await
     async readHeader (source: ArrayBuffer, _config?: unknown) {
         this._readHeaderInfo(source)
         return this._decoder.output
