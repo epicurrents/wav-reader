@@ -44,7 +44,7 @@
   "author": "Sampsa Lohi",
   "license": "Apache-2.0",
   "devDependencies": {
-    "@epicurrents/core": "^2.0.0",
+    "@epicurrents/core": "^2.1.0",
     "@eslint/js": "^9.18.0",
     "@stylistic/eslint-plugin": "^3.0.0",
     "@stylistic/eslint-plugin-ts": "^3.0.0",
@@ -56,7 +56,7 @@
     "vite": "^7.3.1"
   },
   "peerDependencies": {
-    "@epicurrents/core": "^2.0.0",
+    "@epicurrents/core": "^2.1.0",
     "scoped-event-log": "^3.2.0"
   },
   "dependencies": {
