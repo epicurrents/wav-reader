@@ -17,6 +17,13 @@ const SCOPE = 'wav.worker'
 class WavWorker extends SignalReaderWorker<WavReader> {
     constructor () {
         super(new WavReader(SETTINGS))
+        // The cache fill reports its progress through this callback, and the application learns what is cached from
+        // nothing else: without it a shared cache fills in full while the recording still reports it empty.
+        this._reader.setUpdateCallback((update: { [prop: string]: unknown }) => {
+            if (update.action === 'cache-signals') {
+                postMessage(update)
+            }
+        })
         // Only `setup-worker` is registered. The base class builds its action map in a field
         // initializer, where `this.setInterruptions` already resolves through the prototype chain
         // to the override below, so registering that one again would change nothing; `setup-worker`
