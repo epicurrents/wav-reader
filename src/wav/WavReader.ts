@@ -11,13 +11,17 @@ import {
 import type { AppSettings, SignalSourceOptions, SignalStudyReader } from '@epicurrents/core/types'
 import { SUPPORTED_BITS_PER_SAMPLE, WavDecoder } from '#wav/WavDecoder'
 import { Log } from 'scoped-event-log'
-import { headerToBiosignalHeader } from '#util'
-import type { WavHeader } from '#types'
+import { DEFAULT_CALIBRATION, headerToBiosignalHeader, validateCalibration } from '#util'
+import type { WavCalibration, WavHeader } from '#types'
 
 const SCOPE = 'WavReader'
 
 export default class WavReader extends GenericSignalReader implements SignalStudyReader {
 
+    /** What the stored integers stand for, applied to the decoder of every study set up after it is given. */
+    protected _calibration: Required<WavCalibration> = DEFAULT_CALIBRATION
+    /** Why the last calibration given was refused; a study is not set up while one stands. */
+    protected _calibrationRefusal = null as string | null
     protected _decoder = null as WavDecoder | null
     /** Parsed header of the WAV recording. */
     protected _fileTypeHeader = null as WavHeader | null
@@ -45,8 +49,34 @@ export default class WavReader extends GenericSignalReader implements SignalStud
                                 ? Math.floor(this.SETTINGS.app.dataChunkSize/(this._dataUnitSize)) - 1
                                 : 1
         this._discontinuous = false
-        this._header = headerToBiosignalHeader(header)
+        this._header = headerToBiosignalHeader(header, this._calibration.physicalUnit)
         Log.debug(`Cached WAV info for recording.`, SCOPE)
+    }
+
+    /**
+     * Set what the stored integers of the next study stand for.
+     *
+     * Refused once signals are cached: the cache holds samples already scaled, and a second calibration would leave
+     * part of one recording at another scale with nothing to tell the parts apart. An invalid calibration also stops
+     * the next study from being set up, since opening it at the default scale instead gives values that look right
+     * and are not.
+     * @param calibration - Full-scale value and unit; see {@link WavCalibration}.
+     * @returns True if the calibration was taken, false if it was refused.
+     */
+    setCalibration (calibration: WavCalibration) {
+        if (this._mutex || this._fallbackCache) {
+            Log.error(`Cannot change the calibration of a study whose signals are already cached.`, SCOPE)
+            return false
+        }
+        const result = validateCalibration(calibration)
+        if ('reason' in result) {
+            this._calibrationRefusal = result.reason
+            Log.error(`Refused WAV calibration: ${result.reason}`, SCOPE)
+            return false
+        }
+        this._calibration = result.calibration
+        this._calibrationRefusal = null
+        return true
     }
 
     async setupStudy (source: SignalSourceOptions) {
@@ -63,7 +93,13 @@ export default class WavReader extends GenericSignalReader implements SignalStud
             SCOPE)
             return false
         }
-        this._decoder = new WavDecoder()
+        if (this._calibrationRefusal) {
+            Log.error(
+                [`Could not set study parameters.`, `The calibration given was refused: ${this._calibrationRefusal}`],
+            SCOPE)
+            return false
+        }
+        this._decoder = new WavDecoder(this._calibration)
         // The first kB should contain the full header.
         const HEADER_BYTES = 1024
         const sourceName = source.file?.name || source.url as string

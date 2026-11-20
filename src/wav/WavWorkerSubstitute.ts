@@ -29,8 +29,34 @@ export default class WavWorkerSubstitute extends SignalReaderWorkerSubstitute<Wa
         })
         // The substitute binds an added handler to itself before registering it, so an entry passed
         // unbound here still runs with this substitute as its `this`.
-        // eslint-disable-next-line @typescript-eslint/unbound-method
-        this.extendActionMap([['set-interruptions', this.setInterruptions], ['setup-worker', this.setupWorker]])
+        /* eslint-disable @typescript-eslint/unbound-method */
+        this.extendActionMap([
+            ['set-calibration', this.setCalibration],
+            ['set-interruptions', this.setInterruptions],
+            ['setup-worker', this.setupWorker],
+        ])
+        /* eslint-enable @typescript-eslint/unbound-method */
+    }
+
+    /**
+     * Set what the stored integers of the study stand for. Posted by the importer when it hands the worker over, so it
+     * arrives before `setup-worker`; see `WavImporter.setCalibration`.
+     * @param msgData - Data property from the commission, carrying `physicalMax` and optionally `physicalUnit`.
+     */
+    // The handler contract is asynchronous because most commissions read or decode; this one only records a value.
+    // eslint-disable-next-line @typescript-eslint/require-await
+    async setCalibration (msgData: WorkerMessage['data']) {
+        const data = this._validate(
+            msgData as WorkerMessage['data'] & { physicalMax: number, physicalUnit?: string },
+            { physicalMax: 'Number', physicalUnit: 'String?' }
+        )
+        if (!data) {
+            return false
+        }
+        if (!this._reader.setCalibration({ physicalMax: data.physicalMax, physicalUnit: data.physicalUnit })) {
+            return this._failure(msgData, `Setting the calibration failed.`)
+        }
+        return this._success(msgData)
     }
 
     /**

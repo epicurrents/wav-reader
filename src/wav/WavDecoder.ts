@@ -13,25 +13,34 @@
 
 import { BiosignalAudio } from '@epicurrents/core'
 import type { SignalDataDecoder } from '@epicurrents/core/types'
+import { getSignalScale } from '@epicurrents/core/util'
 import { unpackArray, unpackString } from 'byte-data'
 import { Log } from 'scoped-event-log'
-import type { WavHeader } from '#types'
+import type { WavCalibration, WavHeader } from '#types'
+import { DEFAULT_CALIBRATION, MAX_SIGNED_16BIT } from '#util'
 
 const SCOPE = 'WavDecoder'
-/** Value that normalizes a signed 16-bit integer between -1 and 1. */
-const MAX_SIGNED_16BIT = 32_768
 /** The only sample width this decoder reads; see the module docstring for why it is the only one. */
 export const SUPPORTED_BITS_PER_SAMPLE = 16
 
 export class WavDecoder implements SignalDataDecoder {
 
-    protected _normalizationFactor: number
+    /** What a stored integer is divided by to give the sample in the base unit of the calibration's unit. */
+    protected _divisor: number
     protected _inputBuffer: ArrayBuffer | null = null
     protected _output: WavHeader | null = null
 
-    constructor (normalizationFactor = MAX_SIGNED_16BIT*1e6) {
-        // Default normalization factor expects the signal integer values to represent microvolts.
-        this._normalizationFactor = normalizationFactor
+    /**
+     * @param calibration - What the stored integers stand for; one microvolt each when omitted. Expected to be valid
+     *                      already (see `validateCalibration`).
+     */
+    constructor (calibration: WavCalibration = DEFAULT_CALIBRATION) {
+        // Samples leave a reader in the base unit (volts for a microvolt channel), as getSignalScale defines it. The
+        // two divisions are kept apart rather than folded into one product: for the default calibration this is
+        // exactly 1/1e-6, so a sample reads as `integer/1e6` to the last bit.
+        this._divisor = (MAX_SIGNED_16BIT/calibration.physicalMax)/getSignalScale(
+            calibration.physicalUnit ?? DEFAULT_CALIBRATION.physicalUnit
+        )
     }
 
     get output () {
@@ -131,7 +140,7 @@ export class WavDecoder implements SignalDataDecoder {
         // eight-channel file, eight times the allocation for one result.
         const byteArray = new Uint8Array(buffer.slice(start, start + frames*frameBytes))
         const samples = unpackArray(byteArray, { bits: SUPPORTED_BITS_PER_SAMPLE, signed: true })
-        const divisor = returnRaw ? 1 : this._normalizationFactor/MAX_SIGNED_16BIT
+        const divisor = returnRaw ? 1 : this._divisor
         const signals: number[][] = []
         for (let i = 0; i < header.nChannels; i++) {
             const channelData = new Array<number>(frames)

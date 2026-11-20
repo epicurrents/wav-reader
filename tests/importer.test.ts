@@ -79,6 +79,7 @@ describe('importFile', () => {
             bitsPerSample: 16,
             duration: 1,
             fileSize: 444,
+            calibration: { physicalMax: 32_768, physicalUnit: 'uV' },
             nChannels: 2,
             samplingRate: 100,
         })
@@ -184,6 +185,75 @@ describe('getFileTypeWorker', () => {
         const override = new StubWorker() as unknown as Worker
         importer.setWorkerOverride('emg', () => override)
         expect(importer.getFileTypeWorker('ncs')).not.toBe(override)
+    })
+})
+
+describe('calibration', () => {
+    /** Worker stand-in that records what it is sent. */
+    class RecordingWorker {
+        sent = [] as unknown[]
+        addEventListener () {}
+        postMessage (message: unknown) {
+            this.sent.push(message)
+        }
+        removeEventListener () {}
+        terminate () {}
+    }
+
+    test('defaults to one microvolt per integer and posts nothing to the worker', () => {
+        const worker = new RecordingWorker()
+        importer.setWorkerOverride('emg', () => worker as unknown as Worker)
+        importer.getFileTypeWorker('emg')
+        expect(importer.calibration).toStrictEqual({ physicalMax: 32_768, physicalUnit: 'uV' })
+        expect(worker.sent).toStrictEqual([])
+    })
+
+    test('posts a calibration given to the constructor to every worker it hands over', () => {
+        const calibrated = new WavImporter({ calibration: { physicalMax: 5, physicalUnit: 'mV' } })
+        const worker = new RecordingWorker()
+        calibrated.setWorkerOverride('emg', () => worker as unknown as Worker)
+        calibrated.getFileTypeWorker('emg')
+        expect(worker.sent).toStrictEqual([{ action: 'set-calibration', physicalMax: 5, physicalUnit: 'mV' }])
+    })
+
+    test('completes a calibration without a unit with microvolts', () => {
+        expect(importer.setCalibration({ physicalMax: 1000 })).toBe(true)
+        expect(importer.calibration).toStrictEqual({ physicalMax: 1000, physicalUnit: 'uV' })
+    })
+
+    test('records the calibration in the study metadata', async () => {
+        importer.setCalibration({ physicalMax: 5, physicalUnit: 'mV' })
+        await importer.importFile(wavFile())
+        expect(studyOf(importer).meta.calibration).toStrictEqual({ physicalMax: 5, physicalUnit: 'mV' })
+    })
+
+    test.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY])('refuses a full scale of %s', physicalMax => {
+        expect(importer.setCalibration({ physicalMax })).toBe(false)
+    })
+
+    test('refuses an empty unit', () => {
+        expect(importer.setCalibration({ physicalMax: 5, physicalUnit: ' ' })).toBe(false)
+    })
+
+    test('imports nothing while a refused calibration stands', async () => {
+        // Opening the file at the default scale instead would give values that look right and are not.
+        importer.setCalibration({ physicalMax: -5 })
+        expect(await importer.importFile(wavFile())).toBeNull()
+        stubFetch(wavBuffer())
+        expect(await importer.importUrl('https://example.test/recording.wav')).toBeNull()
+        expect(studyOf(importer).files).toHaveLength(0)
+    })
+
+    test('imports again once a valid calibration replaces a refused one', async () => {
+        importer.setCalibration({ physicalMax: -5 })
+        importer.setCalibration({ physicalMax: 5 })
+        expect(await importer.importFile(wavFile())).not.toBeNull()
+    })
+
+    test('returns to the default when the calibration is cleared', () => {
+        importer.setCalibration({ physicalMax: 5, physicalUnit: 'mV' })
+        expect(importer.setCalibration(null)).toBe(true)
+        expect(importer.calibration).toStrictEqual({ physicalMax: 32_768, physicalUnit: 'uV' })
     })
 })
 

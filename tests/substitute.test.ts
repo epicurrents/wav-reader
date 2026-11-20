@@ -114,6 +114,22 @@ describe('setup-worker', () => {
     })
 })
 
+describe('set-calibration', () => {
+    test('accepts a valid calibration', async () => {
+        const substitute = new WavWorkerSubstitute()
+        const replies = await commission(substitute, { action: 'set-calibration', physicalMax: 5, physicalUnit: 'mV' })
+        expect(replies[0]).toMatchObject({ action: 'set-calibration', success: true })
+    })
+
+    test('stops the study opening after an invalid calibration', async () => {
+        const substitute = new WavWorkerSubstitute()
+        const refused = await commission(substitute, { action: 'set-calibration', physicalMax: 0 })
+        expect(refused[0]?.success).toBe(false)
+        const replies = await commission(substitute, { action: 'setup-worker', file: wavFile() })
+        expect(replies[0]).toMatchObject({ action: 'setup-worker', success: false })
+    })
+})
+
 describe('set-interruptions', () => {
     test('refuses a table of interruptions', async () => {
         // A WAV recording is one continuous span of samples, so recording time and data time are

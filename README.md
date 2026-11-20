@@ -40,6 +40,14 @@ What it reads
 
 Sample counts and durations are **per channel** throughout, as the `fact` chunk states them and as a biosignal header expects them. The data chunk holds one sample per channel per frame, so a count taken from its byte length alone would scale with the channel count.
 
+A WAV file **carries no calibration**, so by default each stored integer is read as one microvolt. A host that knows its acquisition device gives the importer the physical value of full scale instead:
+
+```ts
+const importer = new WavImporter({ calibration: { physicalMax: 5, physicalUnit: 'mV' } })
+```
+
+`physicalMax` is what a stored -32768 reads as, negated; `physicalUnit` defaults to `uV` and names the unit of every channel. Samples leave the reader in the base unit as `getSignalScale` defines it (volts for a voltage), so `-32768` above reads as -5 mV. The importer records the calibration in the study metadata and posts it to each worker it hands over as a `set-calibration` message, ahead of `setup-worker`, so the study module carrying the worker needs no part in it. `setCalibration` changes it for the files imported after; a recording already open keeps the scale it was opened with. An invalid calibration (a full scale that is not a finite number above zero, or an empty unit) is refused, and the importer then imports nothing until a valid one is set, because opening the file at the default scale gives values that look right and are not.
+
 A WAV recording is **one continuous span of samples**, so recording time and data time are the same measurement. An interruption table is therefore refused rather than applied — honouring one would displace every later read by the gaps it declares and return samples that still look entirely plausible. An empty table is accepted, since that is also how a caller marks the timing of a recording fully known.
 
 Structure
@@ -51,8 +59,8 @@ Structure
 | [src/wav/WavReader.ts](src/wav/WavReader.ts) | Opens the study and derives the data-unit shape the cache is built from |
 | [src/wav/WavDecoder.ts](src/wav/WavDecoder.ts) | Parses the chunk structure and deinterleaves the PCM samples |
 | [src/wav/WavWorkerSubstitute.ts](src/wav/WavWorkerSubstitute.ts) | Runs the worker's own commission handlers on the main thread |
-| [src/workers/wav.worker.ts](src/workers/wav.worker.ts) | The worker thread, `SignalReaderWorker` plus `setup-worker` |
-| [src/util.ts](src/util.ts) | Converts a parsed WAV header into a biosignal header |
+| [src/workers/wav.worker.ts](src/workers/wav.worker.ts) | The worker thread, `SignalReaderWorker` plus `set-calibration` and `setup-worker` |
+| [src/util.ts](src/util.ts) | Converts a parsed WAV header into a biosignal header; the default calibration and its validation |
 
 Develop
 -------

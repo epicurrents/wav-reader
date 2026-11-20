@@ -7,7 +7,7 @@
 
 import { describe, expect, test } from 'vitest'
 import type { WavHeader } from '#types'
-import { headerToBiosignalHeader } from '#util'
+import { headerToBiosignalHeader, validateCalibration } from '#util'
 
 const header = (overrides: Partial<WavHeader> = {}) => ({
     bitsPerSample: 16,
@@ -55,5 +55,37 @@ describe('headerToBiosignalHeader', () => {
         expect(signal.prefiltering).toStrictEqual({ bandreject: [], highpass: 0, lowpass: 0, notch: 0 })
         expect(signal.physicalUnit).toStrictEqual('uV')
         expect(signal.sensor).toStrictEqual('')
+    })
+})
+
+describe('validateCalibration', () => {
+    test('completes a calibration without a unit with microvolts', () => {
+        expect(validateCalibration({ physicalMax: 10 })).toStrictEqual({
+            calibration: { physicalMax: 10, physicalUnit: 'uV' },
+        })
+    })
+
+    test('trims the unit', () => {
+        expect(validateCalibration({ physicalMax: 10, physicalUnit: ' mV ' })).toStrictEqual({
+            calibration: { physicalMax: 10, physicalUnit: 'mV' },
+        })
+    })
+
+    test.each([null, 5, 'uV', {}])('refuses %s as a calibration', calibration => {
+        expect(validateCalibration(calibration)).toHaveProperty('reason')
+    })
+
+    test('refuses a unit that is not a string', () => {
+        expect(validateCalibration({ physicalMax: 10, physicalUnit: 3 })).toHaveProperty('reason')
+    })
+})
+
+describe('headerToBiosignalHeader units', () => {
+    test('names microvolts unless told otherwise', () => {
+        expect(headerToBiosignalHeader(header()).signals.every(signal => signal.physicalUnit === 'uV')).toBe(true)
+    })
+
+    test('names the unit it is given on every channel', () => {
+        expect(headerToBiosignalHeader(header(), 'mV').signals.every(signal => signal.physicalUnit === 'mV')).toBe(true)
     })
 })

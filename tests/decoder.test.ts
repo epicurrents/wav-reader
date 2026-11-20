@@ -244,14 +244,33 @@ describe('decodeData', () => {
             .toStrictEqual([[-3, -2, 7, 9]])
     })
 
-    test('applies a normalisation factor given to the constructor', () => {
-        const { buffer } = buildWav({ channels: 1, frames: 2, interleaved: [100, 200] })
-        const decoder = new WavDecoder(32_768)
+    test('applies a calibration given to the constructor', () => {
+        const { buffer } = buildWav({ channels: 1, frames: 3, interleaved: [-32768, 16384, 100] })
+        // Full scale at 5 mV: -32768 reads as -5 mV and half of full scale as 2.5 mV, delivered in volts.
+        const decoder = new WavDecoder({ physicalMax: 5, physicalUnit: 'mV' })
         decoder.setInput(buffer)
         decoder.decodeHeader()
-        // A factor equal to full scale leaves the divisor at one, so the samples come through as
-        // the integers they are stored as.
-        expect(decoder.decodeData()?.signals).toStrictEqual([[100, 200]])
+        const [signal] = decoder.decodeData()!.signals
+        expect(signal[0]).toBeCloseTo(-5e-3, 12)
+        expect(signal[1]).toBeCloseTo(2.5e-3, 12)
+        expect(signal[2]).toBeCloseTo(100*5e-3/32_768, 12)
+    })
+
+    test('takes a unit outside the volt scales at face value', () => {
+        const { buffer } = buildWav({ channels: 1, frames: 1, interleaved: [16384] })
+        const decoder = new WavDecoder({ physicalMax: 2, physicalUnit: 'Pa' })
+        decoder.setInput(buffer)
+        decoder.decodeHeader()
+        expect(decoder.decodeData()?.signals).toStrictEqual([[1]])
+    })
+
+    test('reads the default calibration as one microvolt per integer, exactly', () => {
+        const values = [-32768, -3, 1, 7, 100, 32767]
+        const { buffer } = buildWav({ channels: 1, frames: values.length, interleaved: values })
+        const decoder = new WavDecoder()
+        decoder.setInput(buffer)
+        decoder.decodeHeader()
+        expect(decoder.decodeData()?.signals).toStrictEqual([values.map(v => v/UV)])
     })
 
     test('keeps a negative sample negative', () => {

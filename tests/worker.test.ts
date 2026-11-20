@@ -97,3 +97,23 @@ describe('set-interruptions', () => {
         expect(answered[0]?.success).toBe(false)
     })
 })
+
+describe('set-calibration', () => {
+    test('accepts a valid calibration', async () => {
+        const answered = await commission({ action: 'set-calibration', physicalMax: 5, physicalUnit: 'mV' })
+        expect(answered[0]).toMatchObject({ action: 'set-calibration', success: true })
+    })
+
+    test('reports a failure for a full scale that is not a number', async () => {
+        const answered = await commission({ action: 'set-calibration', physicalMax: '5' })
+        expect(answered[0]?.success).toBe(false)
+        expect(answered).toHaveLength(1)
+    })
+
+    test('reports a failure for an invalid full scale', async () => {
+        const answered = await commission({ action: 'set-calibration', physicalMax: -1 })
+        expect(answered[0]?.success).toBe(false)
+        // The worker is shared by every case, so leave it calibrated validly for the next one.
+        await commission({ action: 'set-calibration', physicalMax: 32_768 })
+    })
+})

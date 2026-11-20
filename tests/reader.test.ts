@@ -32,8 +32,9 @@ const internals = (reader: WavReader) => reader as unknown as {
     _dataUnitDuration: number
     _dataUnitSize: number
     _fallbackCache: unknown
+    _decoder: WavDecoder | null
     _fileTypeHeader: { nChannels: number } | null
-    _header: { dataUnitCount: number, signals: { sampleCount: number }[] } | null
+    _header: { dataUnitCount: number, signals: { physicalUnit: string, sampleCount: number }[] } | null
 }
 
 const wavFile = (options: Parameters<typeof buildWav>[0]) => {
@@ -188,5 +189,40 @@ describe('setupStudy', () => {
         expect(processes.every(process => process.continue)).toBe(false)
         expect(processes.some(process => process.continue)).toBe(false)
         expect(state._cacheProcesses).toHaveLength(0)
+    })
+})
+
+describe('setCalibration', () => {
+    let reader: WavReader
+    let removeRuntime: () => void
+
+    beforeEach(() => {
+        removeRuntime = installRuntime(CHUNK_SIZE)
+        reader = new WavReader(settings())
+    })
+
+    afterEach(() => {
+        removeRuntime()
+    })
+
+    test('scales the samples of the study set up after it and names its unit on every channel', async () => {
+        const { buffer } = buildWav({ channels: 2, frames: 2, interleaved: [-32768, 16384, 0, 0] })
+        expect(reader.setCalibration({ physicalMax: 5, physicalUnit: 'mV' })).toBe(true)
+        expect(await reader.setupStudy({ file: new File([buffer], 'recording.wav') })).toBe(true)
+        const header = buildHeader(buffer)
+        const signals = internals(reader)._decoder!.decodeData(header, buffer)!.signals
+        expect(signals[0][0]).toBeCloseTo(-5e-3, 12)
+        expect(signals[1][0]).toBeCloseTo(2.5e-3, 12)
+        expect(internals(reader)._header?.signals.map(signal => signal.physicalUnit)).toStrictEqual(['mV', 'mV'])
+    })
+
+    test('refuses to set up a study while an invalid calibration stands', async () => {
+        expect(reader.setCalibration({ physicalMax: 0 })).toBe(false)
+        expect(await reader.setupStudy({ file: wavFile({ channels: 1, frames: 10 }) })).toBe(false)
+    })
+
+    test('refuses a calibration once signals are cached', () => {
+        internals(reader)._fallbackCache = {}
+        expect(reader.setCalibration({ physicalMax: 5 })).toBe(false)
     })
 })

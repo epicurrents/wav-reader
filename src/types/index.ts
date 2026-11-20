@@ -6,6 +6,19 @@
  */
 
 /**
+ * What the stored integers of a WAV file stand for. The format carries no calibration of its own, so
+ * the host that knows the acquisition device supplies it to the importer.
+ */
+export type WavCalibration = {
+    /**
+     * Physical value of a sample at full scale, in `physicalUnit`: the value a stored integer of
+     * -32768 reads as, negated. Must be a finite number above zero.
+     */
+    physicalMax: number
+    /** Unit of `physicalMax` and of every channel; `uV` when omitted. */
+    physicalUnit?: string
+}
+/**
  * Properties a WAV file declares in its header chunks.
  *
  * Sample counts and the duration derived from them are per channel, as the `fact` chunk states them
@@ -38,4 +51,9 @@ export type WavHeader = {
     sectionSize: number
     /** Format tag of the samples; 1 for plain PCM. */
     typeFormat: number
+}
+/** Options of a WAV importer. */
+export type WavImporterOptions = {
+    /** What the stored integers stand for; one microvolt each when omitted. */
+    calibration?: WavCalibration
 }

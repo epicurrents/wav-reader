@@ -24,15 +24,36 @@ class WavWorker extends SignalReaderWorker<WavReader> {
                 postMessage(update)
             }
         })
-        // Only `setup-worker` is registered. The base class builds its action map in a field
-        // initializer, where `this.setInterruptions` already resolves through the prototype chain
-        // to the override below, so registering that one again would change nothing; `setup-worker`
-        // is in no base map, which is why it has to be added.
+        // Only `set-calibration` and `setup-worker` are registered. The base class builds its action
+        // map in a field initializer, where `this.setInterruptions` already resolves through the
+        // prototype chain to the override below, so registering that one again would change nothing;
+        // the other two are in no base map, which is why they have to be added.
         //
         // The map is bound at dispatch by `handleMessage`, so an entry added unbound here still
         // runs with this worker as its `this`.
         // eslint-disable-next-line @typescript-eslint/unbound-method
-        this.extendActionMap([['setup-worker', this.setupWorker]])
+        this.extendActionMap([['set-calibration', this.setCalibration], ['setup-worker', this.setupWorker]])
+    }
+
+    /**
+     * Set what the stored integers of the study stand for. Posted by the importer when it hands the worker over, so it
+     * arrives before `setup-worker`; see `WavImporter.setCalibration`.
+     * @param msgData - Data property from the message, carrying `physicalMax` and optionally `physicalUnit`.
+     */
+    // The handler contract is asynchronous because most commissions read or decode; this one only records a value.
+    // eslint-disable-next-line @typescript-eslint/require-await
+    async setCalibration (msgData: WorkerMessage['data']) {
+        const data = this._validate(
+            msgData as WorkerMessage['data'] & { physicalMax: number, physicalUnit?: string },
+            { physicalMax: 'Number', physicalUnit: 'String?' }
+        )
+        if (!data) {
+            return false
+        }
+        if (!this._reader.setCalibration({ physicalMax: data.physicalMax, physicalUnit: data.physicalUnit })) {
+            return this._failure(msgData, `Setting the calibration failed.`)
+        }
+        return this._success(msgData)
     }
 
     /**
